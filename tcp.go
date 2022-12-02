@@ -5,41 +5,46 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	plugin "github.com/mefellows/pact-matt-plugin/io_pact_plugin"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 var servers = map[string]net.Listener{}
 
-func startTCPServer(id string, port int) {
-	log.Println("Starting TCP server", id, "on port", port)
+func startTCPServer(id string, port int, expectedMessage string, responseMessage string, mismatches map[string]*plugin.ContentMismatches) {
+	log.Println("[INFO] TCP server", id, "on port", port)
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		log.Println("ERROR:", err)
+		log.Println("[INFO] :", err)
 	}
 	servers[id] = listener
-	log.Println("TCP server started", id, "on port", port)
+	log.Println("[INFO] server started", id, "on port", port)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("TCP connection error:", err)
-			continue
+			log.Println("[ERROR] TCP connection error:", err)
+			log.Println("[INFO] Shutting down TCP listener")
+			break
 		}
 
-		log.Println("TCP connection established with:", conn.RemoteAddr())
+		log.Println("[INFO] TCP connection established with:", conn.RemoteAddr())
 
-		go handleConnection(conn)
+		go handleConnection(conn, expectedMessage, responseMessage, mismatches)
 	}
 }
 
 func stopTCPServer(id string) error {
-	log.Println("Shutting down TCP Server")
+	log.Println("[INFO] shutting down TCP Server")
 
 	// TODO: properly handle this, and send a signal to the handler to stop listening
 	return servers[id].Close()
 }
 
-func handleConnection(conn net.Conn) {
-	log.Println("Handling TCP connection")
+func handleConnection(conn net.Conn, expectedMessage string, responseMessage string, mismatches map[string]*plugin.ContentMismatches) {
+	log.Println("[INFO] handling TCP connection")
+
 	defer conn.Close()
 
 	s := bufio.NewScanner(conn)
@@ -47,29 +52,57 @@ func handleConnection(conn net.Conn) {
 	for s.Scan() {
 
 		data := s.Text()
-		log.Println("Data received from connection", data)
+		log.Println("[DEBUG] received from connection", data)
 
 		if data == "" {
 			continue
 		}
 
-		handleRequest(data, conn)
+		handleRequest(data, conn, expectedMessage, responseMessage, mismatches)
 	}
 }
 
-func handleRequest(req string, conn net.Conn) {
-	log.Println("TCP Server received request", req, "on connection", conn)
+func handleRequest(req string, conn net.Conn, expectedMessage string, response string, mismatchesMap map[string]*plugin.ContentMismatches) {
+	log.Println("[INFO] server received request", req, "on connection", conn)
+
+	mismatches := make([]*plugin.ContentMismatch, 0)
 
 	if !isValidMessage(req) {
-		log.Println("TCP Server received invalid request, erroring")
+		log.Println("[DEBUG] server received invalid request, erroring")
+
+		mismatches = append(mismatches, &plugin.ContentMismatch{
+			Path:     "$",
+			Mismatch: fmt.Sprintf("Received invalid request '%s', message is not a valid MATT message", req),
+		})
+
 		conn.Write([]byte("ERROR\n"))
 	}
-	log.Println("TCP Server received valid request, responding")
+	log.Println("[DEBUG] server received valid request, responding")
 
-	// TODO: this should come from the original request
-	var expectedResponse = "tcpworld"
-	conn.Write([]byte(generateMattMessage(expectedResponse)))
+	parsed := parseMattMessage(req)
+
+	log.Println("[DEBUG] parsed message", parsed)
+
+	if parsed != expectedMessage {
+		log.Println("[DEBUG] matching error", parsed, "!=", expectedMessage)
+		mismatches = append(mismatches, &plugin.ContentMismatch{
+			Path:     "$",
+			Mismatch: fmt.Sprintf("Expected '%s', but received '%s'", expectedMessage, parsed),
+			Expected: wrapperspb.Bytes([]byte(expectedMessage)),
+			Actual:   wrapperspb.Bytes([]byte(parsed)),
+		})
+		log.Println("[DEBUG] mismatches", mismatches)
+	}
+
+	conn.Write([]byte(generateMattMessage(response)))
 	conn.Write([]byte("\n"))
+
+	log.Println("[DEBUG] updating mismatchesMap")
+	if len(mismatches) > 0 {
+		mismatchesMap["$"] = &plugin.ContentMismatches{
+			Mismatches: mismatches,
+		}
+	}
 }
 
 func callMattServiceTCP(host string, port int, message string) (string, error) {
@@ -82,6 +115,7 @@ func callMattServiceTCP(host string, port int, message string) (string, error) {
 	conn.Write([]byte("\n"))
 
 	str, err := bufio.NewReader(conn).ReadString('\n')
+	log.Println("[DEBUG] received raw message:", str, err)
 
 	if err != nil {
 		return "", err

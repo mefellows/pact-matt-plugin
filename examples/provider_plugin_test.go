@@ -64,29 +64,29 @@ func startHTTPProvider() {
 }
 
 func startTCPServer(port int) {
-	log.Println("Starting TCP server on port", port)
+	log.Println("[INFO] TCP server on port", port)
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		log.Println("ERROR:", err)
+		log.Println("[INFO] :", err)
 	}
 
-	log.Println("TCP server started on port", port)
+	log.Println("[INFO] server started on port", port)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("TCP connection error:", err)
+			log.Println("[INFO] connection error:", err)
 			continue
 		}
 
-		log.Println("TCP connection established with:", conn.RemoteAddr())
+		log.Println("[INFO] connection established with:", conn.RemoteAddr())
 
 		go handleConnection(conn)
 	}
 }
 
 func handleConnection(conn net.Conn) {
-	log.Println("Handling TCP connection")
+	log.Println("[INFO] TCP connection")
 	defer conn.Close()
 
 	s := bufio.NewScanner(conn)
@@ -94,7 +94,7 @@ func handleConnection(conn net.Conn) {
 	for s.Scan() {
 
 		data := s.Text()
-		log.Println("Data received from connection", data)
+		log.Println("[INFO] received from connection", data)
 
 		if data == "" {
 			continue
@@ -105,13 +105,13 @@ func handleConnection(conn net.Conn) {
 }
 
 func handleRequest(req string, conn net.Conn) {
-	log.Println("TCP Server received request", req, "on connection", conn)
+	log.Println("[INFO] Server received request", req, "on connection", conn)
 
 	if !isValidMessage(req) {
-		log.Println("TCP Server received invalid request, erroring")
+		log.Println("[INFO] Server received invalid request, erroring")
 		conn.Write([]byte("ERROR\n"))
 	}
-	log.Println("TCP Server received valid request, responding")
+	log.Println("[INFO] Server received valid request, responding")
 
 	// var expectedResponse = "badworld"
 	var expectedResponse = "tcpworld"

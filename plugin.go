@@ -35,7 +35,7 @@ type configurationResponse struct {
 }
 
 func startPluginServer(details serverDetails) {
-	log.Println("starting server on port", details.Port)
+	log.Println("[INFO] server on port", details.Port)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", details.Port))
 	if err != nil {
@@ -61,7 +61,7 @@ type mattPluginServer struct {
 
 // // Check that the plugin loaded OK. Returns the catalogue entries describing what the plugin provides
 func (m *mattPluginServer) InitPlugin(ctx context.Context, req *plugin.InitPluginRequest) (*plugin.InitPluginResponse, error) {
-	log.Println("Received InitPlugin request:", req.Implementation, req.Version)
+	log.Println("[INFO] InitPlugin request:", req.Implementation, req.Version)
 
 	return &plugin.InitPluginResponse{
 		Catalogue: []*plugin.CatalogueEntry{
@@ -80,22 +80,26 @@ func (m *mattPluginServer) InitPlugin(ctx context.Context, req *plugin.InitPlugi
 	}, nil
 }
 
-// Request to configure/setup the interaction for later verification. Data returned will be persisted in the pact file.
+// Use in the mock server
+var expectedRequest, requestedResponse string
 
+// Request to configure/setup the interaction for later verification. Data returned will be persisted in the pact file.
 // Validate the request
 // Setup the pact interaction (including parsing matching rules and setting up generators)
 func (m *mattPluginServer) ConfigureInteraction(ctx context.Context, req *plugin.ConfigureInteractionRequest) (*plugin.ConfigureInteractionResponse, error) {
-	log.Println("Received ConfigureInteraction request:", req.ContentType, req.ContentsConfig)
+	log.Println("[INFO] ConfigureInteraction request:", req.ContentType, req.ContentsConfig)
 
 	// req.ContentsConfig <- protobuf struct, equivalent to what can be represented in JSON
 
 	// TODO: extract the actual request part and put into below
 	config, err := protoStructToConfigMap(req.ContentsConfig)
 
-	log.Println("Parsed ContentsConfig:", config.Request.Body, config.Response.Body, err)
+	log.Println("[INFO] ContentsConfig:", config.Request.Body, config.Response.Body, err)
+	expectedRequest = config.Request.Body
+	requestedResponse = config.Response.Body
 
 	if err != nil {
-		log.Println("ERROR unmarshalling ContentsConfig from JSON:", err)
+		log.Println("[DEBUG] unmarshalling ContentsConfig from JSON:", err)
 		return &plugin.ConfigureInteractionResponse{
 			Error: err.Error(),
 		}, nil
@@ -126,9 +130,15 @@ func (m *mattPluginServer) ConfigureInteraction(ctx context.Context, req *plugin
 	}, nil
 }
 
+// Store mismatches for re-use in GetMockServerResults
+// TODO: this doesn't work - comparecontetns isn't colled for
+var mismatches = make(map[string]*plugin.ContentMismatches)
+
 // Request to perform a comparison of some contents (matching request)
+// This is not used for plugins that also provide a transport,
+// so the matching functions should be separated into a shared function
 func (m *mattPluginServer) CompareContents(ctx context.Context, req *plugin.CompareContentsRequest) (*plugin.CompareContentsResponse, error) {
-	log.Println("Received CompareContents request:", req)
+	log.Println("[INFO] CompareContents request:", req)
 	var mismatch string
 
 	actual := parseMattMessage(string(req.Actual.Content.Value))
@@ -136,23 +146,25 @@ func (m *mattPluginServer) CompareContents(ctx context.Context, req *plugin.Comp
 
 	if actual != expected {
 		mismatch = fmt.Sprintf("expected body '%s' is not equal to actual body '%s'", expected, actual)
-		log.Println("Mismatch found:", mismatch)
+		log.Println("[INFO] found:", mismatch)
 
-		return &plugin.CompareContentsResponse{
-			Results: map[string]*plugin.ContentMismatches{
-				// "foo.bar.baz...." // hierarchical
-				// "column:1" // tabular
-				"$": {
-					Mismatches: []*plugin.ContentMismatch{
-						{
-							Expected: wrapperspb.Bytes([]byte(expected)),
-							Actual:   wrapperspb.Bytes([]byte(actual)),
-							Mismatch: mismatch,
-							Path:     "$",
-						},
+		mismatches = map[string]*plugin.ContentMismatches{
+			// "foo.bar.baz...." // hierarchical
+			// "column:1" // tabular
+			"$": {
+				Mismatches: []*plugin.ContentMismatch{
+					{
+						Expected: wrapperspb.Bytes([]byte(expected)),
+						Actual:   wrapperspb.Bytes([]byte(actual)),
+						Mismatch: mismatch,
+						Path:     "$",
 					},
 				},
 			},
+		}
+
+		return &plugin.CompareContentsResponse{
+			Results: mismatches,
 		}, nil
 	}
 
@@ -163,13 +175,13 @@ func (m *mattPluginServer) CompareContents(ctx context.Context, req *plugin.Comp
 // Request to generate the content using any defined generators
 // If there are no generators, this should just return back the given data
 func (m *mattPluginServer) GenerateContent(ctx context.Context, req *plugin.GenerateContentRequest) (*plugin.GenerateContentResponse, error) {
-	log.Println("Received GenerateContent request:", req.Contents, req.Generators, req.PluginConfiguration)
+	log.Println("[INFO] GenerateContent request:", req.Contents, req.Generators, req.PluginConfiguration)
 
 	var config configuration
 	err := json.Unmarshal(req.Contents.Content.Value, &config)
 
 	if err != nil {
-		log.Println("ERROR:", err)
+		log.Println("[INFO] :", err)
 	}
 
 	return &plugin.GenerateContentResponse{
@@ -183,15 +195,14 @@ func (m *mattPluginServer) GenerateContent(ctx context.Context, req *plugin.Gene
 
 // Updated catalogue. This will be sent when the core catalogue has been updated (probably by a plugin loading).
 func (m *mattPluginServer) UpdateCatalogue(ctx context.Context, cat *plugin.Catalogue) (*emptypb.Empty, error) {
-	log.Println("Received UpdateCatalogue request:", cat.Catalogue)
+	log.Println("[INFO] UpdateCatalogue request:", cat.Catalogue)
 
 	return &emptypb.Empty{}, nil
-
 }
 
 // Start a mock server
 func (m *mattPluginServer) StartMockServer(ctx context.Context, req *plugin.StartMockServerRequest) (*plugin.StartMockServerResponse, error) {
-	log.Println("Received StartMockServer request:", req)
+	log.Println("[INFO] StartMockServer request:", req)
 	var err error
 	port := int(req.Port)
 
@@ -199,7 +210,7 @@ func (m *mattPluginServer) StartMockServer(ctx context.Context, req *plugin.Star
 	if port == 0 {
 		port, err = GetFreePort()
 		if err != nil {
-			log.Println("ERROR unable to find a free port:", err)
+			log.Println("[INFO] unable to find a free port:", err)
 			return &plugin.StartMockServerResponse{
 				Response: &plugin.StartMockServerResponse_Error{
 					Error: err.Error(),
@@ -207,7 +218,8 @@ func (m *mattPluginServer) StartMockServer(ctx context.Context, req *plugin.Star
 			}, err
 		}
 	}
-	go startTCPServer(id, port)
+
+	go startTCPServer(id, port, expectedRequest, requestedResponse, mismatches)
 
 	return &plugin.StartMockServerResponse{
 		Response: &plugin.StartMockServerResponse_Details{
@@ -224,7 +236,7 @@ func (m *mattPluginServer) StartMockServer(ctx context.Context, req *plugin.Star
 
 // Shutdown a running mock server
 func (m *mattPluginServer) ShutdownMockServer(ctx context.Context, req *plugin.ShutdownMockServerRequest) (*plugin.ShutdownMockServerResponse, error) {
-	log.Println("Received ShutdownMockServer request:", req)
+	log.Println("[INFO] ShutdownMockServer request:", req)
 
 	err := stopTCPServer(req.ServerKey)
 	if err != nil {
@@ -247,11 +259,30 @@ func (m *mattPluginServer) ShutdownMockServer(ctx context.Context, req *plugin.S
 
 // Get the matching results from a running mock server
 func (m *mattPluginServer) GetMockServerResults(ctx context.Context, req *plugin.MockServerRequest) (*plugin.MockServerResults, error) {
-	log.Println("Received GetMockServerResults request:", req)
+	log.Println("[INFO] GetMockServerResults request:", req)
 
 	// TODO: error if server not called, or mismatches found
-	return &plugin.MockServerResults{}, nil
+	// ComtpareContents won't get called if there is a mock server. in protobufs,
 
+	// The mock server is responsible for comparing its contents
+	// In the case of a plugin that implements both content + Protocols, you would likely share the mismatch function
+	// or persist the mismatches (as is the case here)
+	if len(mismatches) > 0 {
+		results := make([]*plugin.MockServerResult, 0)
+
+		for path, mismatch := range mismatches {
+			results = append(results, &plugin.MockServerResult{
+				Path:       path,
+				Mismatches: mismatch.Mismatches,
+			})
+		}
+
+		return &plugin.MockServerResults{
+			Results: results,
+		}, nil
+	}
+
+	return &plugin.MockServerResults{}, nil
 }
 
 var requestMessage = ""
@@ -263,46 +294,12 @@ var responseMessage = ""
 // If no modification is necessary, this should simply send the unmodified request back to the framework
 func (m *mattPluginServer) PrepareInteractionForVerification(ctx context.Context, req *plugin.VerificationPreparationRequest) (*plugin.VerificationPreparationResponse, error) {
 	// 2022/10/27 23:06:42 Received PrepareInteractionForVerification request: pact:"{\"consumer\":{\"name\":\"matttcpconsumer\"},\"interactions\":[{\"description\":\"Matt message\",\"key\":\"f27f2917655cb542\",\"pending\":false,\"request\":{\"contents\":{\"content\":\"MATThellotcpMATT\",\"contentType\":\"application/matt\",\"contentTypeHint\":\"DEFAULT\",\"encoded\":false}},\"response\":[{\"contents\":{\"content\":\"MATTtcpworldMATT\",\"contentType\":\"application/matt\",\"contentTypeHint\":\"DEFAULT\",\"encoded\":false}}],\"transport\":\"matt\",\"type\":\"Synchronous/Messages\"}],\"metadata\":{\"pactRust\":{\"ffi\":\"0.3.13\",\"mockserver\":\"0.9.4\",\"models\":\"0.4.5\"},\"pactSpecification\":{\"version\":\"4.0\"},\"plugins\":[{\"configuration\":{},\"name\":\"matt\",\"version\":\"0.0.1\"}]},\"provider\":{\"name\":\"matttcpprovider\"}}" interactionKey:"f27f2917655cb542" config:{fields:{key:"host" value:{string_value:"localhost"}} fields:{key:"port" value:{number_value:8444}}}
-	log.Println("Received PrepareInteractionForVerification request:", req)
+	log.Println("[INFO] PrepareInteractionForVerification request:", req)
 
-	var p pactv4
-	err := json.Unmarshal([]byte(req.Pact), &p)
-	if err != nil {
-		log.Println("ERROR extracting payload for verification:", err)
-	}
+	requestMessage, responseMessage = extractRequestAndResponseMessages(req.Pact, req.InteractionKey)
 
-	// Find the current interaction in the Pact
-	for _, inter := range p.Interactions {
-		log.Println("finding interaction by key", req.InteractionKey)
-		log.Println(inter)
-
-		switch i := inter.(type) {
-		case *httpInteraction:
-			log.Println("comparing keys", i.interaction.Key, req.InteractionKey)
-			if i.Key == req.InteractionKey {
-				log.Println("found HTTP interaction")
-				requestMessage = parseMattMessage(i.Request.Body.Content)
-				responseMessage = parseMattMessage(i.Response.Body.Content)
-			}
-		case *asyncMessageInteraction:
-			log.Println("comparing keys", i.interaction.Key, req.InteractionKey)
-			if i.Key == req.InteractionKey {
-				log.Println("found async interaction")
-				requestMessage = parseMattMessage(i.Contents.Content)
-			}
-		case *syncMessageInteraction:
-			log.Println("comparing keys", i.interaction.Key, req.InteractionKey)
-			if i.Key == req.InteractionKey {
-				log.Println("found sync interaction")
-				requestMessage = parseMattMessage(i.Request.Contents.Content)
-				responseMessage = parseMattMessage(i.Response[0].Contents.Content)
-			}
-		default:
-			log.Printf("unknown interaction type: '%+v'", i)
-		}
-	}
-	log.Println("found request body:", requestMessage)
-	log.Println("found response body:", responseMessage)
+	log.Println("[DEBUG] request body:", requestMessage)
+	log.Println("[DEBUG] response body:", responseMessage)
 
 	return &plugin.VerificationPreparationResponse{
 		Response: &plugin.VerificationPreparationResponse_InteractionData{
@@ -319,15 +316,15 @@ func (m *mattPluginServer) PrepareInteractionForVerification(ctx context.Context
 
 // Execute the verification for the interaction.
 func (m *mattPluginServer) VerifyInteraction(ctx context.Context, req *plugin.VerifyInteractionRequest) (*plugin.VerifyInteractionResponse, error) {
-	log.Println("Received VerifyInteraction request:", req)
+	log.Println("[INFO] received VerifyInteraction request:", req)
 
 	// Issue the call to the provider
 	host := req.Config.AsMap()["host"].(string)
 	port := req.Config.AsMap()["port"].(float64)
 
-	log.Println("Calling TCP service at host", host, "and port", port)
+	log.Println("[INFO] calling TCP service at host", host, "and port", port)
 	actual, err := callMattServiceTCP(host, int(port), requestMessage)
-	log.Println("Received:", actual, "wanted:", responseMessage, "err:", err)
+	log.Println("[INFO] actual:", actual, "wanted:", responseMessage, "err:", err)
 
 	// Report on the results
 	if actual != responseMessage {
@@ -368,14 +365,14 @@ func protoStructToConfigMap(s *structpb.Struct) (configuration, error) {
 	bytes, err := s.MarshalJSON()
 
 	if err != nil {
-		log.Println("ERROR marshalling ContentsConfig to JSON:", err)
+		log.Println("[ERROR] error marshalling ContentsConfig to JSON:", err)
 		return config, nil
 	}
 
 	err = json.Unmarshal(bytes, &config)
 
 	if err != nil {
-		log.Println("ERROR unmarshalling ContentsConfig from JSON:", err)
+		log.Println("[ERROR] error unmarshalling ContentsConfig from JSON:", err)
 		return config, nil
 	}
 
@@ -397,4 +394,46 @@ func GetFreePort() (int, error) {
 	port := l.Addr().(*net.TCPAddr).Port
 	defer l.Close()
 	return port, nil
+}
+
+// Accepts a Pact JSON string and interactionKey, and extracts the relevant messages
+func extractRequestAndResponseMessages(pact string, interactionKey string) (request string, response string) {
+	var p pactv4
+	err := json.Unmarshal([]byte(pact), &p)
+	if err != nil {
+		log.Println("[ERROR] unable to extract payload for verification:", err)
+	}
+
+	// Find the current interaction in the Pact
+	for _, inter := range p.Interactions {
+		log.Println("[DEBUG] looking for interaction by key", interactionKey)
+		log.Println(inter)
+
+		switch i := inter.(type) {
+		case *httpInteraction:
+			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
+			if i.Key == interactionKey {
+				log.Println("[DEBUG] HTTP interaction")
+				return parseMattMessage(i.Request.Body.Content), parseMattMessage(i.Response.Body.Content)
+			}
+		case *asyncMessageInteraction:
+			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
+			if i.Key == interactionKey {
+				log.Println("[DEBUG] async interaction")
+				return parseMattMessage(i.Contents.Content), ""
+			}
+		case *syncMessageInteraction:
+			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
+			if i.Key == interactionKey {
+				log.Println("[DEBUG] sync interaction")
+				return parseMattMessage(i.Request.Contents.Content), parseMattMessage(i.Response[0].Contents.Content)
+			}
+		default:
+			log.Printf("unknown interaction type: '%+v'", i)
+
+			return "", ""
+		}
+	}
+
+	return "", ""
 }

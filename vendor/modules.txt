@@ -1,5 +1,6 @@
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
+github.com/davecgh/go-spew/spew
 # github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
 github.com/golang/protobuf/jsonpb
@@ -13,12 +14,24 @@ github.com/golang/protobuf/ptypes/timestamp
 github.com/google/uuid
 # github.com/hashicorp/logutils v1.0.0
 ## explicit
+github.com/hashicorp/logutils
 # github.com/pact-foundation/pact-go/v2 v2.0.0-beta.14
 ## explicit; go 1.15
+github.com/pact-foundation/pact-go/v2/consumer
+github.com/pact-foundation/pact-go/v2/internal/native
+github.com/pact-foundation/pact-go/v2/log
+github.com/pact-foundation/pact-go/v2/matchers
+github.com/pact-foundation/pact-go/v2/message/v4
+github.com/pact-foundation/pact-go/v2/models
+github.com/pact-foundation/pact-go/v2/provider
+github.com/pact-foundation/pact-go/v2/proxy
+github.com/pact-foundation/pact-go/v2/utils
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
+github.com/pmezard/go-difflib/difflib
 # github.com/stretchr/testify v1.8.1
 ## explicit; go 1.13
+github.com/stretchr/testify/assert
 # golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
 ## explicit; go 1.17
 golang.org/x/net/http/httpguts
@@ -132,3 +145,4 @@ google.golang.org/protobuf/types/known/wrapperspb
 gopkg.in/natefinch/lumberjack.v2
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
+gopkg.in/yaml.v3

@@ -38,12 +38,13 @@ func (p *pactv4) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("unknown interaction type: '%s'", v.Type)
 		}
 
-		log.Println("identified narrow type:", i)
+		log.Println("[DEBUG] identified narrow type:", i)
 		err = json.Unmarshal(raw, i)
 		if err != nil {
 			return err
 		}
-		log.Println("unmarshalled into narrow type:", i)
+
+		log.Println("[DEBUG] unmarshalled into narrow type:", i)
 		p.Interactions = append(p.Interactions, i)
 	}
 	return nil

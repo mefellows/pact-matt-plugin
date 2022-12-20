@@ -131,6 +131,38 @@ typedef struct MatchingRuleDefinitionResult MatchingRuleDefinitionResult;
 typedef struct MatchingRuleIterator MatchingRuleIterator;
 
 /**
+ * The matching rule or reference from parsing the matching definition expression.
+ *
+ * For matching rules, the ID corresponds to the following rules:
+ * | Rule | ID |
+ * | ---- | -- |
+ * | Equality | 1 |
+ * | Regex | 2 |
+ * | Type | 3 |
+ * | MinType | 4 |
+ * | MaxType | 5 |
+ * | MinMaxType | 6 |
+ * | Timestamp | 7 |
+ * | Time | 8 |
+ * | Date | 9 |
+ * | Include | 10 |
+ * | Number | 11 |
+ * | Integer | 12 |
+ * | Decimal | 13 |
+ * | Null | 14 |
+ * | ContentType | 15 |
+ * | ArrayContains | 16 |
+ * | Values | 17 |
+ * | Boolean | 18 |
+ * | StatusCode | 19 |
+ * | NotEmpty | 20 |
+ * | Semver | 21 |
+ * | EachKey | 22 |
+ * | EachValue | 23 |
+ */
+typedef struct MatchingRuleResult MatchingRuleResult;
+
+/**
  * Struct that defines a message.
  */
 typedef struct Message Message;
@@ -281,63 +313,6 @@ typedef struct ProviderStateParamPair {
    */
   const char *value;
 } ProviderStateParamPair;
-
-/**
- * The matching rule or reference from parsing the matching definition expression.
- *
- * For matching rules, the ID corresponds to the following rules:
- * | Rule | ID |
- * | ---- | -- |
- * | Equality | 1 |
- * | Regex | 2 |
- * | Type | 3 |
- * | MinType | 4 |
- * | MaxType | 5 |
- * | MinMaxType | 6 |
- * | Timestamp | 7 |
- * | Time | 8 |
- * | Date | 9 |
- * | Include | 10 |
- * | Number | 11 |
- * | Integer | 12 |
- * | Decimal | 13 |
- * | Null | 14 |
- * | ContentType | 15 |
- * | ArrayContains | 16 |
- * | Values | 17 |
- * | Boolean | 18 |
- * | StatusCode | 19 |
- * | NotEmpty | 20 |
- * | Semver | 21 |
- * | EachKey | 22 |
- * | EachValue | 23 |
- */
-typedef enum MatchingRuleResult_Tag {
-  /**
-   * The matching rule from the expression.
-   */
-  MatchingRuleResult_MatchingRule,
-  /**
-   * A reference to a named item.
-   */
-  MatchingRuleResult_MatchingReference,
-} MatchingRuleResult_Tag;
-
-typedef struct MatchingRuleResult_MatchingRule_Body {
-  uint16_t _0;
-  const char *_1;
-  const struct MatchingRule *_2;
-} MatchingRuleResult_MatchingRule_Body;
-
-typedef struct MatchingRuleResult {
-  MatchingRuleResult_Tag tag;
-  union {
-    MatchingRuleResult_MatchingRule_Body matching_rule;
-    struct {
-      const char *matching_reference;
-    };
-  };
-} MatchingRuleResult;
 
 /**
  * Wraps a Pact model struct
@@ -1985,21 +1960,116 @@ struct MatchingRuleIterator *pactffi_matcher_definition_iter(const struct Matchi
 const struct MatchingRuleResult *pactffi_matching_rule_iter_next(struct MatchingRuleIterator *iter);
 
 /**
- * Get the next matching rule or reference from the iterator. As the values returned are owned
- * by the iterator, they do not need to be deleted but will be cleaned up when the iterator is
- * deleted.
+ * Return the ID of the matching rule.
  *
- * Will return a NULL pointer when the iterator has advanced past the end of the list.
+ * The ID corresponds to the following rules:
+ * | Rule | ID |
+ * | ---- | -- |
+ * | Equality | 1 |
+ * | Regex | 2 |
+ * | Type | 3 |
+ * | MinType | 4 |
+ * | MaxType | 5 |
+ * | MinMaxType | 6 |
+ * | Timestamp | 7 |
+ * | Time | 8 |
+ * | Date | 9 |
+ * | Include | 10 |
+ * | Number | 11 |
+ * | Integer | 12 |
+ * | Decimal | 13 |
+ * | Null | 14 |
+ * | ContentType | 15 |
+ * | ArrayContains | 16 |
+ * | Values | 17 |
+ * | Boolean | 18 |
+ * | StatusCode | 19 |
+ * | NotEmpty | 20 |
+ * | Semver | 21 |
+ * | EachKey | 22 |
+ * | EachValue | 23 |
  *
  * # Safety
  *
- * This function is safe.
- *
- * # Error Handling
- *
- * This function will return a NULL pointer if passed a NULL pointer or if an error occurs.
+ * This function is safe as long as the MatchingRuleResult pointer is a valid pointer and the
+ * iterator has not been deleted.
  */
-const struct MatchingRule *pactffi_matching_rule_from_result(const struct MatchingRuleResult *result);
+uint16_t pactffi_matching_rule_id(const struct MatchingRuleResult *rule_result);
+
+/**
+ * Returns the associated value for the matching rule. If the matching rule does not have an
+ * associated value, will return a NULL pointer.
+ *
+ * The associated values for the rules are:
+ * | Rule | ID | VALUE |
+ * | ---- | -- | ----- |
+ * | Equality | 1 | NULL |
+ * | Regex | 2 | Regex value |
+ * | Type | 3 | NULL |
+ * | MinType | 4 | Minimum value |
+ * | MaxType | 5 | Maximum value |
+ * | MinMaxType | 6 | "min:max" |
+ * | Timestamp | 7 | Format string |
+ * | Time | 8 | Format string |
+ * | Date | 9 | Format string |
+ * | Include | 10 | String value |
+ * | Number | 11 | NULL |
+ * | Integer | 12 | NULL |
+ * | Decimal | 13 | NULL |
+ * | Null | 14 | NULL |
+ * | ContentType | 15 | Content type |
+ * | ArrayContains | 16 | NULL |
+ * | Values | 17 | NULL |
+ * | Boolean | 18 | NULL |
+ * | StatusCode | 19 | NULL |
+ * | NotEmpty | 20 | NULL |
+ * | Semver | 21 | NULL |
+ * | EachKey | 22 | NULL |
+ * | EachValue | 23 | NULL |
+ *
+ * Will return a NULL pointer if the matching rule was a reference or does not have an
+ * associated value.
+ *
+ * # Safety
+ *
+ * This function is safe as long as the MatchingRuleResult pointer is a valid pointer and the
+ * iterator it came from has not been deleted.
+ */
+const char *pactffi_matching_rule_value(const struct MatchingRuleResult *rule_result);
+
+/**
+ * Returns the matching rule pointer for the matching rule. Will return a NULL pointer if the
+ * matching rule result was a reference.
+ *
+ * # Safety
+ *
+ * This function is safe as long as the MatchingRuleResult pointer is a valid pointer and the
+ * iterator it came from has not been deleted.
+ */
+const struct MatchingRule *pactffi_matching_rule_pointer(const struct MatchingRuleResult *rule_result);
+
+/**
+ * Return any matching rule reference to a attribute by name. This is when the matcher should
+ * be configured to match the type of a structure. I.e.,
+ *
+ * ```json
+ * {
+ *   "pact:match": "eachValue(matching($'person'))",
+ *   "person": {
+ *     "name": "Fred",
+ *     "age": 100
+ *   }
+ * }
+ * ```
+ *
+ * Will return a NULL pointer if the matching rule was not a reference.
+ *
+ * # Safety
+ *
+ * This function is safe as long as the MatchingRuleResult pointer is a valid pointer and the
+ * iterator has not been deleted.
+ */
+const char *pactffi_matching_rule_reference_name(const struct MatchingRuleResult *rule_result);
 
 /**
  * Get the JSON form of the matching rule.
@@ -2012,6 +2082,18 @@ const struct MatchingRule *pactffi_matching_rule_from_result(const struct Matchi
  * value of the matching rule has been deleted.
  */
 const char *pactffi_matching_rule_to_json(const struct MatchingRule *rule);
+
+/**
+ * Get a Matching Rule from JSON.
+ *
+ * The returned string must be deleted with `pactffi_string_delete`.
+ *
+ * # Safety
+ *
+ * This function will fail if it is passed a NULL pointer, or the iterator that owns the
+ * value of the matching rule has been deleted.
+ */
+const struct MatchingRule *pactffi_matching_rule_from_json(const char *rule);
 
 /**
  * Get the JSON form of the generator.
@@ -3341,5 +3423,153 @@ unsigned int pactffi_interaction_contents(InteractionHandle interaction,
                                           enum InteractionPart part,
                                           const char *content_type,
                                           const char *contents);
+
+/**
+ * Determines if the string value matches the given matching rule. If the value matches OK,
+ * will return a NULL pointer. If the value does not match, will return a error message as
+ * a NULL terminated string. The error message pointer will need to be deleted with the
+ * `pactffi_string_delete` function once it is no longer required.
+ *
+ * * matching_rule - pointer to a matching rule
+ * * expected_value - value we expect to get as a NULL terminated string
+ * * actual_value - value to match as a NULL terminated string
+ * * cascaded - if the matching rule has been cascaded from a parent. 0 == false, 1 == true
+ *
+ * # Safety
+ *
+ * The matching rule pointer must be a valid pointer, and the value parameters must be
+ * valid pointers to a NULL terminated strings.
+ */
+const char *pactffi_matches_string_value(const struct MatchingRule *matching_rule,
+                                         const char *expected_value,
+                                         const char *actual_value,
+                                         uint8_t cascaded);
+
+/**
+ * Determines if the unsigned integer value matches the given matching rule. If the value matches OK,
+ * will return a NULL pointer. If the value does not match, will return a error message as
+ * a NULL terminated string. The error message pointer will need to be deleted with the
+ * `pactffi_string_delete` function once it is no longer required.
+ *
+ * * matching_rule - pointer to a matching rule
+ * * expected_value - value we expect to get
+ * * actual_value - value to match
+ * * cascaded - if the matching rule has been cascaded from a parent. 0 == false, 1 == true
+ *
+ * # Safety
+ *
+ * The matching rule pointer must be a valid pointer.
+ */
+const char *pactffi_matches_u64_value(const struct MatchingRule *matching_rule,
+                                      uint64_t expected_value,
+                                      uint64_t actual_value,
+                                      uint8_t cascaded);
+
+/**
+ * Determines if the signed integer value matches the given matching rule. If the value matches OK,
+ * will return a NULL pointer. If the value does not match, will return a error message as
+ * a NULL terminated string. The error message pointer will need to be deleted with the
+ * `pactffi_string_delete` function once it is no longer required.
+ *
+ * * matching_rule - pointer to a matching rule
+ * * expected_value - value we expect to get
+ * * actual_value - value to match
+ * * cascaded - if the matching rule has been cascaded from a parent. 0 == false, 1 == true
+ *
+ * # Safety
+ *
+ * The matching rule pointer must be a valid pointer.
+ */
+const char *pactffi_matches_i64_value(const struct MatchingRule *matching_rule,
+                                      int64_t expected_value,
+                                      int64_t actual_value,
+                                      uint8_t cascaded);
+
+/**
+ * Determines if the floating point value matches the given matching rule. If the value matches OK,
+ * will return a NULL pointer. If the value does not match, will return a error message as
+ * a NULL terminated string. The error message pointer will need to be deleted with the
+ * `pactffi_string_delete` function once it is no longer required.
+ *
+ * * matching_rule - pointer to a matching rule
+ * * expected_value - value we expect to get
+ * * actual_value - value to match
+ * * cascaded - if the matching rule has been cascaded from a parent. 0 == false, 1 == true
+ *
+ * # Safety
+ *
+ * The matching rule pointer must be a valid pointer.
+ */
+const char *pactffi_matches_f64_value(const struct MatchingRule *matching_rule,
+                                      double expected_value,
+                                      double actual_value,
+                                      uint8_t cascaded);
+
+/**
+ * Determines if the boolean value matches the given matching rule. If the value matches OK,
+ * will return a NULL pointer. If the value does not match, will return a error message as
+ * a NULL terminated string. The error message pointer will need to be deleted with the
+ * `pactffi_string_delete` function once it is no longer required.
+ *
+ * * matching_rule - pointer to a matching rule
+ * * expected_value - value we expect to get, 0 == false and 1 == true
+ * * actual_value - value to match, 0 == false and 1 == true
+ * * cascaded - if the matching rule has been cascaded from a parent. 0 == false, 1 == true
+ *
+ * # Safety
+ *
+ * The matching rule pointer must be a valid pointer.
+ */
+const char *pactffi_matches_bool_value(const struct MatchingRule *matching_rule,
+                                       uint8_t expected_value,
+                                       uint8_t actual_value,
+                                       uint8_t cascaded);
+
+/**
+ * Determines if the binary value matches the given matching rule. If the value matches OK,
+ * will return a NULL pointer. If the value does not match, will return a error message as
+ * a NULL terminated string. The error message pointer will need to be deleted with the
+ * `pactffi_string_delete` function once it is no longer required.
+ *
+ * * matching_rule - pointer to a matching rule
+ * * expected_value - value we expect to get
+ * * expected_value_len - length of the expected value bytes
+ * * actual_value - value to match
+ * * actual_value_len - length of the actual value bytes
+ * * cascaded - if the matching rule has been cascaded from a parent. 0 == false, 1 == true
+ *
+ * # Safety
+ *
+ * The matching rule, expected value and actual value pointers must be a valid pointers.
+ * expected_value_len and actual_value_len must contain the number of bytes that the value
+ * pointers point to. Passing invalid lengths can lead to undefined behaviour.
+ */
+const char *pactffi_matches_binary_value(const struct MatchingRule *matching_rule,
+                                         const unsigned char *expected_value,
+                                         uintptr_t expected_value_len,
+                                         const unsigned char *actual_value,
+                                         uintptr_t actual_value_len,
+                                         uint8_t cascaded);
+
+/**
+ * Determines if the JSON value matches the given matching rule. If the value matches OK,
+ * will return a NULL pointer. If the value does not match, will return a error message as
+ * a NULL terminated string. The error message pointer will need to be deleted with the
+ * `pactffi_string_delete` function once it is no longer required.
+ *
+ * * matching_rule - pointer to a matching rule
+ * * expected_value - value we expect to get as a NULL terminated string
+ * * actual_value - value to match as a NULL terminated string
+ * * cascaded - if the matching rule has been cascaded from a parent. 0 == false, 1 == true
+ *
+ * # Safety
+ *
+ * The matching rule pointer must be a valid pointer, and the value parameters must be
+ * valid pointers to a NULL terminated strings.
+ */
+const char *pactffi_matches_json_value(const struct MatchingRule *matching_rule,
+                                       const char *expected_value,
+                                       const char *actual_value,
+                                       uint8_t cascaded);
 
 #endif /* pact_ffi_h */

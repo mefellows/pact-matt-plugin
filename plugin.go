@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 
 	"github.com/google/uuid"
+	"github.com/mefellows/pact-matt-plugin/ffi"
 	plugin "github.com/mefellows/pact-matt-plugin/io_pact_plugin"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -89,12 +91,9 @@ var expectedRequest, requestedResponse string
 func (m *mattPluginServer) ConfigureInteraction(ctx context.Context, req *plugin.ConfigureInteractionRequest) (*plugin.ConfigureInteractionResponse, error) {
 	log.Println("[INFO] ConfigureInteraction request:", req.ContentType, req.ContentsConfig)
 
-	// req.ContentsConfig <- protobuf struct, equivalent to what can be represented in JSON
-
-	// TODO: extract the actual request part and put into below
 	config, err := protoStructToConfigMap(req.ContentsConfig)
 
-	log.Println("[INFO] ContentsConfig:", config.Request.Body, config.Response.Body, err)
+	log.Println("[INFO] ContentsConfig. Request:", config.Request.Body, "Response:", config.Response.Body, err)
 	expectedRequest = config.Request.Body
 	requestedResponse = config.Response.Body
 
@@ -106,22 +105,85 @@ func (m *mattPluginServer) ConfigureInteraction(ctx context.Context, req *plugin
 	}
 
 	var interactions = make([]*plugin.InteractionResponse, 0)
+
 	if config.Request.Body != "" {
+		// Parse any expressions.
+		// NOTE: this plugin only supports a basic string value, so it can also
+		//       only support primitive values
+		requestBodyValue, requestRules, requestGenerator, err := parseExpression(config.Request.Body)
+
+		if err != nil {
+			log.Println("[ERROR] unable to parse request expression:", err)
+			return &plugin.ConfigureInteractionResponse{
+				Error: err.Error(),
+			}, nil
+		}
+
+		var generators map[string]*plugin.Generator
+
+		if requestGenerator != nil {
+			generators = map[string]*plugin.Generator{
+				"$": generatorsToPluginGenerators(*requestGenerator),
+			}
+		}
+
+		var matchingRules map[string]*plugin.MatchingRules
+
+		if len(requestRules) > 0 {
+			matchingRules = map[string]*plugin.MatchingRules{
+				"$": {
+					Rule: matchingRulesToPluginMatchingRules(requestRules),
+				},
+			}
+		}
+
 		interactions = append(interactions, &plugin.InteractionResponse{
 			Contents: &plugin.Body{
 				ContentType: "application/matt",
-				Content:     wrapperspb.Bytes([]byte(generateMattMessage(config.Request.Body))),
+				Content:     wrapperspb.Bytes([]byte(generateMattMessage(requestBodyValue))),
 			},
-			PartName: "request",
+			PartName:   "request",
+			Rules:      matchingRules,
+			Generators: generators,
 		})
 	}
+
 	if config.Response.Body != "" {
+
+		responseBodyValue, responseRules, responseGenerator, err := parseExpression(config.Response.Body)
+		if err != nil {
+			log.Println("[ERROR] unable to parse response expression:", err)
+			return &plugin.ConfigureInteractionResponse{
+				Error: err.Error(),
+			}, nil
+		}
+
+		var generators map[string]*plugin.Generator
+
+		if responseGenerator != nil {
+			generators = map[string]*plugin.Generator{
+				"$": generatorsToPluginGenerators(*responseGenerator),
+			}
+		}
+
+		var matchingRules map[string]*plugin.MatchingRules
+
+		if len(responseRules) > 0 {
+			matchingRules = map[string]*plugin.MatchingRules{
+				"$": {
+					Rule: matchingRulesToPluginMatchingRules(responseRules),
+				},
+			}
+		}
+
 		interactions = append(interactions, &plugin.InteractionResponse{
 			Contents: &plugin.Body{
 				ContentType: "application/matt",
-				Content:     wrapperspb.Bytes([]byte(generateMattMessage(config.Response.Body))),
+				Content:     wrapperspb.Bytes([]byte(generateMattMessage(responseBodyValue))),
 			},
-			PartName: "response",
+			PartName:   "response",
+			Rules:      matchingRules,
+			Generators: generators,
 		})
 	}
 
@@ -139,13 +201,34 @@ var mismatches = make(map[string]*plugin.ContentMismatches)
 // so the matching functions should be separated into a shared function
 func (m *mattPluginServer) CompareContents(ctx context.Context, req *plugin.CompareContentsRequest) (*plugin.CompareContentsResponse, error) {
 	log.Println("[INFO] CompareContents request:", req)
-	var mismatch string
 
 	actual := parseMattMessage(string(req.Actual.Content.Value))
 	expected := parseMattMessage(string(req.Expected.Content.Value))
 
-	if actual != expected {
-		mismatch = fmt.Sprintf("expected body '%s' is not equal to actual body '%s'", expected, actual)
+	// 1. Extract the actual and expected values (bytes)
+	// 2. Do something protocol specific, to read in the data structure of both sides
+	// 3. Compare actual vs expected
+	//    returse the actual data structure, and for each attribute, apply matching rule (test the matching rule)
+
+	// {
+	// 	foo: {               -> was there a matching rule at path `$.foo`, and then does value for path matching
+	// 		bar: [{
+	// 			baz: 1,
+	// 			foo: "string",
+	// 			...
+	// 		}]
+	// 	}
+	// }
+
+	// // JSON Path expressions
+	// // $.foo.bar[*].baz,
+
+	mismatch := applyMatchingRules("$", expected, actual, req.Rules)
+
+	// TODO: extract matching rules!
+	// TODO: can we do a "matching_rule_from_json" ffi method?
+
+	if mismatch != nil {
 		log.Println("[INFO] found:", mismatch)
 
 		mismatches = map[string]*plugin.ContentMismatches{
@@ -156,7 +239,7 @@ func (m *mattPluginServer) CompareContents(ctx context.Context, req *plugin.Comp
 					{
 						Expected: wrapperspb.Bytes([]byte(expected)),
 						Actual:   wrapperspb.Bytes([]byte(actual)),
-						Mismatch: mismatch,
+						Mismatch: mismatch.Error(),
 						Path:     "$",
 					},
 				},
@@ -436,4 +519,166 @@ func extractRequestAndResponseMessages(pact string, interactionKey string) (requ
 	}
 
 	return "", ""
+}
+
+func parseExpression(expression string) (value string, rules []ffi.MatchingRule, generator *ffi.Generator, err error) {
+	log.Println("parseExpression:", expression)
+	result := ffi.ParseMatcherDefinition(expression)
+	rules = make([]ffi.MatchingRule, 0)
+
+	if result == nil {
+		log.Println("[INFO] no expression detected")
+		return value, rules, generator, err
+	}
+
+	log.Printf("[DEBUG] check expression parsing error")
+	err = ffi.MatcherDefinitionError(result)
+	if err != nil {
+		log.Println("err", err)
+		return value, rules, generator, err
+	}
+	log.Printf("no error, getting value")
+
+	value = ffi.MatcherDefinitionValue(result)
+	log.Println("value", value)
+
+	iter := ffi.MatcherDefinitionIter(result)
+	log.Println("iter", iter)
+	ruleResult := ffi.MatchingRuleIterNext(iter)
+	log.Println("ruleResult", ruleResult)
+
+	if ruleResult != nil {
+		log.Println("ruleResult not nil")
+		rule := ffi.MatchingRulePtr(ruleResult)
+		log.Println("rule", rule)
+		ruleAsJson, err := ffi.MatchingRuleToJson(rule)
+		log.Println("ruleAsJson", ruleAsJson, "err", err)
+		log.Println("ruleAsJson", ruleAsJson, "err", err)
+		if err != nil {
+			return value, rules, generator, err
+		}
+
+		rules = append(rules, ruleAsJson)
+	}
+
+	generatorPtr := ffi.MatcherDefinitionGenerator(result)
+	log.Println("generatorPtr", generatorPtr)
+
+	if generatorPtr != nil {
+		log.Println("generatorPtr not nil")
+		g, err := ffi.GeneratorToJSON(generatorPtr)
+		log.Println("generator", generator, "err", err)
+		generator = &g
+
+		if err != nil {
+			return value, rules, generator, err
+		}
+	}
+
+	return value, rules, generator, err
+}
+
+func matchingRulesToPluginMatchingRules(rules []ffi.MatchingRule) []*plugin.MatchingRule {
+	matchingRules := make([]*plugin.MatchingRule, 0)
+
+	for _, r := range rules {
+		values, err := structpb.NewStruct(r.Values)
+
+		if err != nil {
+			log.Println("[ERROR] unable to serialise matching rule into a protobof struct", err)
+			return nil
+		}
+
+		matchingRules = append(matchingRules, &plugin.MatchingRule{
+			Type:   r.Type,
+			Values: values,
+		})
+	}
+
+	return matchingRules
+}
+
+func generatorsToPluginGenerators(g ffi.Generator) *plugin.Generator {
+	values, err := structpb.NewStruct(g.Values)
+
+	if err != nil {
+		log.Println("[ERROR] unable to serialise generator into a protobof struct", err)
+		return nil
+	}
+
+	return &plugin.Generator{
+		Type:   g.Type,
+		Values: values,
+	}
+}
+
+// Rules will be keyed by the path
+func rulesFromProtobufMatchingRules(rules map[string]*plugin.MatchingRules) map[string][]ffi.MatchingRule {
+	log.Println("[DEBUG] rulesFromProtobufMatchingRules")
+	result := make(map[string][]ffi.MatchingRule, len(rules))
+
+	for k, v := range rules {
+		log.Println("[DEBUG] transforming a rule")
+		transformed := make([]ffi.MatchingRule, 0)
+
+		for _, r := range v.Rule {
+			transformed = append(transformed, ffi.MatchingRule{
+				Type:   r.Type,
+				Values: r.Values.AsMap(),
+			})
+		}
+
+		result[k] = transformed
+		log.Println("[DEBUG] transformed", len(result[k]), "rules")
+	}
+
+	return result
+}
+
+// TODO: should this be an array of errors?
+func applyMatchingRules(path string, expected string, actual string, rawRules map[string]*plugin.MatchingRules) error {
+	log.Println("[DEBUG] applyMatchingRules")
+	rules := rulesFromProtobufMatchingRules(rawRules)
+
+	// No matchers? Perform a straight diff
+	if len(rawRules) == 0 {
+		log.Println("[DEBUG] no rules, direct match")
+		if actual != expected {
+			return fmt.Errorf("expected body '%s' is not equal to actual body '%s'", expected, actual)
+		}
+	}
+	log.Println("[DEBUG] found rules, applying them")
+
+	// Apply matchers. Probably, this should return multiple errors
+	pathRules, ok := rules[path]
+	if !ok {
+		return nil
+	}
+
+	for _, r := range pathRules {
+		log.Println("[DEBUG] converting rule to JSON", r)
+		bytes, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		log.Println("[DEBUG] have rule as JSON", string(bytes))
+
+		matchingRule := ffi.MatchingRuleFromJson(string(bytes))
+		if matchingRule == nil {
+			return fmt.Errorf("unable to parse matching rule JSON, context: '%s'", string(bytes))
+		}
+		log.Println("[DEBUG] have matching rule", matchingRule)
+
+		if matchingRule == nil {
+			return fmt.Errorf("unable to parse matching rule, nil pointer received from 'MatchingRuleFromJson'")
+		}
+
+		mismatch := ffi.MatchesStringValue(matchingRule, expected, actual, false)
+
+		if mismatch != "" {
+			return errors.New(mismatch)
+		}
+	}
+
+	return nil
 }

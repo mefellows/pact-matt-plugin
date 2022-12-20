@@ -29,6 +29,10 @@ Separate out the body on the request/response part of the interaction:
 	mattResponse := `{"response":{"body":"world"}}`
 ```
 
+### Supported expressions
+
+TODO
+
 ## Use Case
 
 The MATT protocol is a simple text-based protocol, designed for efficient communication of messages to a Matt.

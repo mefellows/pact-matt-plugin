@@ -9,116 +9,64 @@ typedef int bool;
 #define true 1
 #define false 0
 
-
 typedef struct MatchingRuleDefinitionResult MatchingRuleDefinitionResult;
 typedef struct Generator Generator;
+
 typedef struct MatchingRule MatchingRule;
+typedef struct MatchingRuleResult MatchingRuleResult;
 typedef struct MatchingRuleIterator MatchingRuleIterator;
 
-typedef enum MatchingRuleResult_Tag {
-   // The matching rule from the expression.
-	 MatchingRuleResult_MatchingRule,
-	 // A reference to a named item.
-	 MatchingRuleResult_MatchingReference,
- } MatchingRuleResult_Tag;
-
- typedef struct MatchingRuleResult_MatchingRule_Body {
-	 uint16_t _0;
-	 const char *_1;
-	 const struct MatchingRule *_2;
- } MatchingRuleResult_MatchingRule_Body;
-
- typedef struct MatchingRuleResult {
-	 MatchingRuleResult_Tag tag;
-	 union {
-		 MatchingRuleResult_MatchingRule_Body matching_rule;
-		 struct {
-			 const char *matching_reference;
-		 };
-	 } value;
- } MatchingRuleResult;
+typedef enum ExpressionValueType {
+	 ExpressionValueType_Unknown,
+	 ExpressionValueType_String,
+	 ExpressionValueType_Number,
+	 ExpressionValueType_Integer,
+	 ExpressionValueType_Decimal,
+	 ExpressionValueType_Boolean,
+ } ExpressionValueType;
 
 // Initialise the core
 void pactffi_init(char* log);
+void pactffi_string_delete(char *string);
 
-MatchingRuleDefinitionResult* pactffi_parse_matcher_definition(const char *expression);
+MatchingRuleDefinitionResult *pactffi_parse_matcher_definition(const char *expression);
 const char *pactffi_matcher_definition_error(MatchingRuleDefinitionResult *definition);
-const char* pactffi_matcher_definition_value(MatchingRuleDefinitionResult *definition);
-Generator* *pactffi_matcher_definition_generator(MatchingRuleDefinitionResult *definition);
-
-// Get the iterator
 struct MatchingRuleIterator *pactffi_matcher_definition_iter(const struct MatchingRuleDefinitionResult *definition);
+void pactffi_matching_rule_iter_delete(struct MatchingRuleIterator *iter);
+void pactffi_matcher_definition_delete(const struct MatchingRuleDefinitionResult *definition);
 
-// Get the next result
+// Generators
+Generator *pactffi_matcher_definition_generator(MatchingRuleDefinitionResult *definition);
+const char *pactffi_generator_to_json(const struct Generator *generator);
+const char *pactffi_generator_generate_string(const struct Generator *generator, const char *context_json);
+unsigned short pactffi_generator_generate_integer(const struct Generator *generator, const char *context_json);
+// TODO: get rust to make this opaque as well
+struct StringResult pactffi_generate_datetime_string(const char *format);
+struct StringResult pactffi_generate_regex_value(const char *regex);
+
+// Matching Rules
 const struct MatchingRuleResult *pactffi_matching_rule_iter_next(struct MatchingRuleIterator *iter);
-
-// Get the rule as JSON
 const char* pactffi_matching_rule_to_json(const struct MatchingRule *rule);
+const struct MatchingRule *pactffi_matching_rule_from_json(const char *rule);
+const char* pactffi_matcher_definition_value(MatchingRuleDefinitionResult *definition);
+ExpressionValueType pactffi_matcher_definition_value_type(const struct MatchingRuleDefinitionResult *definition);
+const struct MatchingRule *pactffi_matching_rule_pointer(const struct MatchingRuleResult *rule_result);
 
-// Ditto for Generators!
-
-
-
-// segfault
-// [pact_ffi/src/models/matching_rules.rs:19] "pactffi_matching_rule_to_json" = "pactffi_matching_rule_to_json"
-// [pact_ffi/src/models/matching_rules.rs:22] &rule = SIGILL: illegal instruction
-// "The SIGILL signal is raised when an attempt is made to execute an invalid, privileged,
-// or ill-formed instruction. SIGILL is usually caused by a program error that overlays code with data
-// or by a call to a function that is not linked into the program load module."
-
-// [pact_ffi/src/models/expressions.rs:391] "pactffi_matching_rule_iter_next" = "pactffi_matching_rule_iter_next"
-// [pact_ffi/src/models/expressions.rs:393] &result = MatchingRule(
-//     2,
-//     0x0000600000014010,
-//     0x0000000208b75ac0,
-// )
-// res &{tag:0 _:[0 0 0 0] value:[2 0 183 8 2 0 0 0 16 64 1 0 0 96 0 0 192 90 183 8 2 0 0 0]}
-// char: \w{3}\d+
-// num: 2
-// getMatchingRuleJSON
-// [pact_ffi/src/models/matching_rules.rs:19] "pactffi_matching_rule_to_json" = "pactffi_matching_rule_to_json"
-// [pact_ffi/src/models/matching_rules.rs:21] &rule = 0x0000000208b75ac0
-// [pact_ffi/src/models/matching_rules.rs:23] &rule = SIGILL: illegal instruction
-const struct MatchingRule *matching_rule_from_result(const struct MatchingRuleResult *result) {
-	return result->value.matching_rule._2;
-}
-
-// Correct value
-const char *matching_rule_char_from_result(const struct MatchingRuleResult *result) {
-	return result->value.matching_rule._1;
-}
-
-// Correct value
-uint16_t matching_rule_num_from_result(const struct MatchingRuleResult *result) {
-	return result->value.matching_rule._0;
-}
-
-void get_matching_rule_json_from_expression(const char* expression) {
-	MatchingRuleDefinitionResult* definition = pactffi_parse_matcher_definition(expression);
-
-	// Get iterator
-	struct MatchingRuleIterator* iterator = pactffi_matcher_definition_iter(definition);
-
-	// Get the first matching result (ignoring error checking for brevity)
-	const struct MatchingRuleResult* result = pactffi_matching_rule_iter_next(iterator);
-
-	// Get the rule enum value (should match regex value of 2)
-	printf("result->value.matching_rule._0 => %d \n", result->value.matching_rule._0);
-
-	// Get the rule detail (in this case, the regx)
-	printf("result->value.matching_rule._1 => %s \n", result->value.matching_rule._1);
-
-	// Get the rule as JSON
-	printf("calling pactffi_matching_rule_to_json \n");
-	const char* json = pactffi_matching_rule_to_json(result->value.matching_rule._2);
-	printf("JSON => %s \n", json);
-}
+// Check if a value satisfies a given matching rule
+// (used on the verification side of an interaction)
+const char *pactffi_matches_string_value(const struct MatchingRule *matching_rule, const char *expected_value, const char *actual_value, uint8_t cascaded);
+const char *pactffi_matches_u64_value(const struct MatchingRule *matching_rule, uint64_t expected_value, uint64_t actual_value, uint8_t cascaded);
+const char *pactffi_matches_i64_value(const struct MatchingRule *matching_rule, int64_t expected_value, int64_t actual_value, uint8_t cascaded);
+const char *pactffi_matches_f64_value(const struct MatchingRule *matching_rule, double expected_value, double actual_value, uint8_t cascaded);
+const char *pactffi_matches_bool_value(const struct MatchingRule *matching_rule, uint8_t expected_value, uint8_t actual_value, uint8_t cascaded);
+const char *pactffi_matches_binary_value(const struct MatchingRule *matching_rule, const unsigned char *expected_value, uintptr_t expected_value_len, const unsigned char *actual_value, uintptr_t actual_value_len, uint8_t cascaded);
+const char *pactffi_matches_json_value(const struct MatchingRule *matching_rule, const char *expected_value, const char *actual_value, uint8_t cascaded);
+bool pactffi_check_regex(const char *regex, const char *example);
 
 */
 import "C"
 import (
-	"bytes"
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -150,119 +98,75 @@ func Init() {
 	})
 }
 
-type MatchingRule map[string]interface{}
+// TODO: rewrite this and wrap the types (e.g. type state pattern), so that you can only
+//       call functions once a value is populated and accessible
 
 func ParseMatcherDefinition(definition string) *C.MatchingRuleDefinitionResult {
 	cDefinition := C.CString(definition)
 	defer free(cDefinition)
 	res := C.pactffi_parse_matcher_definition(cDefinition)
 
-	log.Println("[INFO] result", res)
-
 	return res
 }
 
+func MatcherDefinitionDelete(definition *C.MatchingRuleDefinitionResult) {
+	C.pactffi_matcher_definition_delete(definition)
+}
+
+func MatchingRulePtr(matchingRuleResult *C.MatchingRuleResult) *C.MatchingRule {
+	return C.pactffi_matching_rule_pointer(matchingRuleResult)
+}
+
 // Extract the matching rule value
-func ParseMatcherDefinitionValue(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) string {
+// This will _always_ be a string. Use MatcherDefinitionValueType to cast to the correct type
+func MatcherDefinitionValue(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) string {
 	res := C.pactffi_matcher_definition_value(matchingRuleDefinitionResult)
 
 	log.Println("[INFO] result", C.GoString(res))
 	return C.GoString(res)
 }
 
-func ParseMatcherDefinitionMatchingRules(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) ([]MatchingRule, error) {
-	// void get_matching_rule_json_from_expression(const char* expression) {
-	C.get_matching_rule_json_from_expression(C.CString("matching(regex, '\\w{3}\\d+', 'abc123')"))
-	// C.get_matching_rule_json_from_expression(C.CString("matching(type, 42)"))
+type ExpressionValueType uint
 
-	return nil, nil
+const (
+	ExpressionValueTypeUnknown ExpressionValueType = 0
+	ExpressionValueTypeString  ExpressionValueType = 1
+	ExpressionValueTypeNumber  ExpressionValueType = 2
+	ExpressionValueTypeInteger ExpressionValueType = 3
+	ExpressionValueTypeDecimal ExpressionValueType = 4
+	ExpressionValueTypeBoolean ExpressionValueType = 5
+)
+
+// Extract the matching rule value
+func MatcherDefinitionValueType(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) ExpressionValueType {
+	return ExpressionValueType(C.pactffi_matcher_definition_value_type(matchingRuleDefinitionResult))
 }
 
-// Extract the matching rule JSON
-func ParseMatcherDefinitionMatchingRules2(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) ([]MatchingRule, error) {
-	fmt.Println("ParseMatcherDefinitionMatchingRules")
-	log.Println("[DEBUG] ParseMatcherDefinitionMatchingRules")
-
-	err := getMatchingRuleError(matchingRuleDefinitionResult)
-	rules := make([]MatchingRule, 0)
-
-	if err != nil {
-		return rules, err
-	}
-
-	iter := getMatchingRuleIterator(matchingRuleDefinitionResult)
-
-	for {
-		res := getMatchingRuleResult(iter)
-		fmt.Printf("res %+v \n", res)
-		log.Println("[DEBUG] res", res)
-
-		if res == nil {
-			fmt.Println("no more matching rule results")
-			log.Println("[DEBUG] no more matching rule results")
-
-			break
-		}
-
-		tag := res.tag
-
-		// Determine: MatchingRuleResult_Tag
-		// 0 => MatchingRuleResult_MatchingRule,
-		// 1 => MatchingRuleResult_MatchingReference,
-
-		if tag == 0 {
-			log.Println("[DEBUG] discovered a matching rule")
-
-			// rule_body := (*C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(&res))
-			// rule_body := (*C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(&res.value))
-			// rule_body := (*C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(&res.matching_rule))
-			// rule_body := (*C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(&res))
-			// rule_body := (*C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(&res.[0]))
-			// matchingRule := MatchingRuleFromUnion(res)
-			// Use C to test this
-			// C.get_matching_rule_json_from_expression(C.CString("matching(type, 42)"))
-
-			// matchingRule := C.matching_rule_from_result(res)
-			// c := C.matching_rule_char_from_result(res)
-			// fmt.Println("char:", C.GoString(c))
-			// num := C.matching_rule_num_from_result(res)
-			// fmt.Println("num:", num)
-			// // matchingRule := union_to_matching_rule(res.value)
-			// // matchingRule := getMatchingRuleJSONFromResult(res)
-			// // spew.Dump(rule_body._2)
-			// log.Println("[DEBUG] matching rule JSON:", matchingRule)
-
-			// // TODO: this should be the correct path to the matching rule object
-			// // json2 := getMatchingRuleJSON((rule_body._2))
-			// // log.Println("[DEBUG] matching rule JSON", string(json2))
-
-			// // TODO: Why is this in field 1????? did the pact.h cbingen get the alignment wrong or something?
-			// // js := getMatchingRuleJSON(rule_body._2)
-			// // js := getMatchingRuleJSON((*C.MatchingRule)(unsafe.Pointer(rule_body._2)))
-			// // js := getMatchingRuleJSON(rule_body._2)
-			// js := getMatchingRuleJSON(matchingRule)
-			// log.Println("[DEBUG] matching rule JSON", js)
-			// log.Println("[DEBUG] matching rule JSON", string(js))
-
-			// var rule MatchingRule
-			// err := json.Unmarshal([]byte(js), &rule)
-
-			// if err != nil {
-			// 	return rules, err
-			// }
-
-			// rules = append(rules, rule)
-
-		} else {
-			return rules, fmt.Errorf("plugin does not support matching references")
-		}
-	}
-
-	return rules, nil
+func MatcherDefinitionGenerator(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) *C.Generator {
+	return C.pactffi_matcher_definition_generator(matchingRuleDefinitionResult)
 }
 
-func getMatchingRuleError(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) error {
-	fmt.Println("getMatchingRuleError")
+func MatchingRuleToJson(matchingRule *C.MatchingRule) (MatchingRule, error) {
+	var rule MatchingRule
+	res := C.pactffi_matching_rule_to_json(matchingRule)
+
+	log.Println("[DEBUG] JSON matching rules: ", C.GoString(res))
+
+	defer pactStringDelete(res)
+
+	err := json.Unmarshal([]byte(C.GoString(res)), &rule)
+
+	return rule, err
+}
+
+func MatchingRuleFromJson(rule string) *C.MatchingRule {
+	cRule := C.CString(rule)
+	defer free(cRule)
+
+	return C.pactffi_matching_rule_from_json(cRule)
+}
+
+func MatcherDefinitionError(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) error {
 	log.Println("[DEBUG] getMatchingRuleError")
 
 	res := C.pactffi_matcher_definition_error(matchingRuleDefinitionResult)
@@ -276,88 +180,129 @@ func getMatchingRuleError(matchingRuleDefinitionResult *C.MatchingRuleDefinition
 	return nil
 }
 
-func getMatchingRuleIterator(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) *C.MatchingRuleIterator {
-	fmt.Println("getMatchingRuleIterator")
+func MatcherDefinitionIter(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) *C.MatchingRuleIterator {
 	log.Println("[DEBUG] getMatchingRuleIterator")
 
 	return C.pactffi_matcher_definition_iter(matchingRuleDefinitionResult)
 }
 
-func getMatchingRuleResult(matchingRuleIterator *C.MatchingRuleIterator) *C.MatchingRuleResult {
-	fmt.Println("getMatchingRuleResult")
+func MatcherDefinitionIterDelete(iter *C.MatchingRuleIterator) {
+	C.pactffi_matching_rule_iter_delete(iter)
+}
+
+func MatchingRuleIterNext(matchingRuleIterator *C.MatchingRuleIterator) *C.MatchingRuleResult {
 	log.Println("[DEBUG] getMatchingRuleResult")
 
 	return C.pactffi_matching_rule_iter_next(matchingRuleIterator)
 }
 
-// func getMatchingRuleJSONFromResult(result *C.MatchingRuleResult) string {
-// 	fmt.Println("getMatchingRuleFromResult 2")
-// 	log.Println("[DEBUG] getMatchingRuleFromResult 2")
+func GeneratorToJSON(g *C.Generator) (Generator, error) {
+	res := C.pactffi_generator_to_json(g)
+	var generator Generator
 
-// 	res := C.pactffi_matching_rule_json_from_result(result)
+	log.Println("[DEBUG] JSON generated rules: ", C.GoString(res))
 
-// 	return C.GoString(res)
-// }
+	defer pactStringDelete(res)
 
-func getMatchingRuleJSON(matchingRule *C.MatchingRule) string {
-	fmt.Println("getMatchingRuleJSON")
-	log.Println("[DEBUG] getMatchingRuleJSON")
+	err := json.Unmarshal([]byte(C.GoString(res)), &generator)
 
-	res := C.pactffi_matching_rule_to_json(matchingRule)
-	fmt.Println("res", res)
+	return generator, err
+}
+
+func GeneratorGenerateString(generator *C.Generator, contextJSON string) string {
+	cContext := C.CString(contextJSON)
+	defer free(cContext)
+
+	res := C.pactffi_generator_generate_string(generator, cContext)
 
 	return C.GoString(res)
+}
+func GeneratorGenerateInteger(generator *C.Generator, contextJSON string) uint8 {
+	cContext := C.CString(contextJSON)
+	defer free(cContext)
+
+	return uint8(C.pactffi_generator_generate_integer(generator, cContext))
+}
+
+// Check if a value satisfies a given matching rule
+// (used on the verification side of an interaction)
+
+func MatchesStringValue(rule *C.MatchingRule, expected string, actual string, cascaded bool) string {
+	cExpected := C.CString(expected)
+	cActual := C.CString(actual)
+	defer free(cExpected)
+	defer free(cActual)
+
+	res := C.pactffi_matches_string_value(rule, cExpected, cActual, boolean(cascaded))
+
+	return C.GoString(res)
+}
+
+func MatchesU64Value(rule *C.MatchingRule, expected uint64, actual uint64, cascaded bool) string {
+	res := C.pactffi_matches_u64_value(rule, C.ulonglong(expected), C.ulonglong(actual), boolean(cascaded))
+
+	return C.GoString(res)
+}
+
+func MatchesI64Value(rule *C.MatchingRule, expected int64, actual int64, cascaded bool) string {
+	res := C.pactffi_matches_i64_value(rule, C.longlong(expected), C.longlong(actual), boolean(cascaded))
+
+	return C.GoString(res)
+}
+
+func MatchesF64Value(rule *C.MatchingRule, expected float64, actual float64, cascaded bool) string {
+	res := C.pactffi_matches_f64_value(rule, C.double(expected), C.double(actual), boolean(cascaded))
+
+	return C.GoString(res)
+}
+
+func MatchesBoolValue(rule *C.MatchingRule, expected bool, actual bool, cascaded bool) string {
+	res := C.pactffi_matches_bool_value(rule, boolean(expected), boolean(actual), boolean(cascaded))
+
+	return C.GoString(res)
+}
+
+func MatchesBinaryValue(rule *C.MatchingRule, expected []byte, expectedValueLen uintptr, actual []byte, actualValueLen uintptr, cascaded bool) string {
+
+	res := C.pactffi_matches_binary_value(rule, (*C.uchar)(unsafe.Pointer(&expected[0])), C.ulong(expectedValueLen), (*C.uchar)(unsafe.Pointer(&actual[0])), C.ulong(actualValueLen), boolean(cascaded))
+
+	return C.GoString(res)
+}
+
+func MatchesJsonValue(rule *C.MatchingRule, expected string, actual string, cascaded bool) string {
+	cExpected := C.CString(expected)
+	cActual := C.CString(actual)
+	defer free(cExpected)
+	defer free(cActual)
+
+	res := C.pactffi_matches_json_value(rule, cExpected, cActual, boolean(cascaded))
+
+	return C.GoString(res)
+}
+
+func MatchesRegex(rule *C.MatchingRule, regex string, example string) bool {
+	cRegex := C.CString(regex)
+	cExample := C.CString(example)
+	defer free(cRegex)
+	defer free(cExample)
+
+	res := C.pactffi_check_regex(cRegex, cExample)
+
+	return int(res) != 0
 }
 
 func free(str *C.char) {
 	C.free(unsafe.Pointer(str))
 }
 
-func MatchingRuleFromUnion2(data C.MatchingRuleResult) *C.MatchingRule {
-	var union [24]byte = data.value // The union, as 24 contiguous bytes of memory
-	// Why 24? Go finds the biggest type in the union and allocates that space
-
-	// The first magic. The address of the first element in that contiguous memory
-	// is the address of that union.
-	var addr *byte = &union[0]
-	fmt.Println(addr)
-
-	// The second magic. Instead of pointing to bytes of memory, we can point
-	// to some useful type, T, by changing the type of the pointer to *T using
-	// unsafe.Pointer. In this case we want to interpret the union as member
-	// `MatchingRuleResult_MatchingRule_Body matching_rule`. That is, T = (*C.MatchingRuleResult_MatchingRule_Body) and *T = (**C.MatchingRuleResult_MatchingRule_Body).
-	var cast **C.MatchingRuleResult_MatchingRule_Body = (**C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(addr))
-	fmt.Println(cast)
-
-	// The final step. We wanted the contents of the union, not the address
-	// of the union. Dereference it!
-	return (*cast)._2
+func pactStringDelete(str *C.char) {
+	C.pactffi_string_delete(str)
 }
 
-func MatchingRuleFromUnion(data *C.MatchingRuleResult) *C.MatchingRule {
-	star := (**C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(&data.value))
-	return (**star)._2
-
-}
-
-// https://sunzenshen.github.io/tutorials/2015/05/09/cgotchas-intro.html
-// https://stackoverflow.com/questions/14581063/golang-cgo-converting-union-field-to-go-type
-
-func union_to_matching_rule(cbytes [24]byte) *C.MatchingRule {
-	buf := bytes.NewBuffer(cbytes[:])
-	var ptr uint64
-	if err := binary.Read(buf, binary.LittleEndian, &ptr); err == nil {
-		uptr := uintptr(ptr)
-		var result *C.MatchingRuleResult_MatchingRule_Body = (*C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(uptr))
-		fmt.Println("union_to_matching")
-		fmt.Println(result)
-		return result._2
+func boolean(val bool) C.uchar {
+	if val {
+		return C.uchar(1)
 
 	}
-	return nil
+	return C.uchar(0)
 }
-
-// Options
-
-// 1. c method in header to handle the union
-// 2.

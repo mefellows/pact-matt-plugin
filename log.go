@@ -41,13 +41,13 @@ func initLogging() {
 	// https://github.com/pact-foundation/pact-plugins/blob/main/drivers/rust/driver/src/plugin_manager.rs#L244
 	// Hard coding to DEBUG for now
 	if logFilter == nil {
-		logFilter = &logutils.LevelFilter{
-			Levels:   []logutils.LogLevel{logLevelTrace, logLevelDebug, logLevelInfo, logLevelWarn, logLevelError},
-			MinLevel: logutils.LogLevel("DEBUG"),
-			// MinLevel: logutils.LogLevel(detectLogLevel()),
-			Writer: lumberjackLogger,
-		}
-		log.SetOutput(logFilter)
+		// logFilter = &logutils.LevelFilter{
+		// 	Levels:   []logutils.LogLevel{logLevelTrace, logLevelDebug, logLevelInfo, logLevelWarn, logLevelError},
+		// 	MinLevel: logutils.LogLevel("TRACE"),
+		// 	// MinLevel: logutils.LogLevel(detectLogLevel()),
+		// 	Writer: lumberjackLogger,
+		// }
+		// log.SetOutput(logFilter)
 		log.Println("[DEBUG] initialised logging")
 	}
 }

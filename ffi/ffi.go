@@ -180,7 +180,6 @@ func ParseMatcherDefinitionMatchingRules(matchingRuleDefinitionResult *C.Matchin
 
 // Extract the matching rule JSON
 func ParseMatcherDefinitionMatchingRules2(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) ([]MatchingRule, error) {
-	fmt.Println("ParseMatcherDefinitionMatchingRules")
 	log.Println("[DEBUG] ParseMatcherDefinitionMatchingRules")
 
 	err := getMatchingRuleError(matchingRuleDefinitionResult)
@@ -194,11 +193,9 @@ func ParseMatcherDefinitionMatchingRules2(matchingRuleDefinitionResult *C.Matchi
 
 	for {
 		res := getMatchingRuleResult(iter)
-		fmt.Printf("res %+v \n", res)
 		log.Println("[DEBUG] res", res)
 
 		if res == nil {
-			fmt.Println("no more matching rule results")
 			log.Println("[DEBUG] no more matching rule results")
 
 			break
@@ -224,9 +221,7 @@ func ParseMatcherDefinitionMatchingRules2(matchingRuleDefinitionResult *C.Matchi
 
 			// matchingRule := C.matching_rule_from_result(res)
 			// c := C.matching_rule_char_from_result(res)
-			// fmt.Println("char:", C.GoString(c))
 			// num := C.matching_rule_num_from_result(res)
-			// fmt.Println("num:", num)
 			// // matchingRule := union_to_matching_rule(res.value)
 			// // matchingRule := getMatchingRuleJSONFromResult(res)
 			// // spew.Dump(rule_body._2)
@@ -262,7 +257,6 @@ func ParseMatcherDefinitionMatchingRules2(matchingRuleDefinitionResult *C.Matchi
 }
 
 func getMatchingRuleError(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) error {
-	fmt.Println("getMatchingRuleError")
 	log.Println("[DEBUG] getMatchingRuleError")
 
 	res := C.pactffi_matcher_definition_error(matchingRuleDefinitionResult)
@@ -277,21 +271,18 @@ func getMatchingRuleError(matchingRuleDefinitionResult *C.MatchingRuleDefinition
 }
 
 func getMatchingRuleIterator(matchingRuleDefinitionResult *C.MatchingRuleDefinitionResult) *C.MatchingRuleIterator {
-	fmt.Println("getMatchingRuleIterator")
 	log.Println("[DEBUG] getMatchingRuleIterator")
 
 	return C.pactffi_matcher_definition_iter(matchingRuleDefinitionResult)
 }
 
 func getMatchingRuleResult(matchingRuleIterator *C.MatchingRuleIterator) *C.MatchingRuleResult {
-	fmt.Println("getMatchingRuleResult")
 	log.Println("[DEBUG] getMatchingRuleResult")
 
 	return C.pactffi_matching_rule_iter_next(matchingRuleIterator)
 }
 
 // func getMatchingRuleJSONFromResult(result *C.MatchingRuleResult) string {
-// 	fmt.Println("getMatchingRuleFromResult 2")
 // 	log.Println("[DEBUG] getMatchingRuleFromResult 2")
 
 // 	res := C.pactffi_matching_rule_json_from_result(result)
@@ -300,11 +291,9 @@ func getMatchingRuleResult(matchingRuleIterator *C.MatchingRuleIterator) *C.Matc
 // }
 
 func getMatchingRuleJSON(matchingRule *C.MatchingRule) string {
-	fmt.Println("getMatchingRuleJSON")
 	log.Println("[DEBUG] getMatchingRuleJSON")
 
 	res := C.pactffi_matching_rule_to_json(matchingRule)
-	fmt.Println("res", res)
 
 	return C.GoString(res)
 }
@@ -320,14 +309,12 @@ func MatchingRuleFromUnion2(data C.MatchingRuleResult) *C.MatchingRule {
 	// The first magic. The address of the first element in that contiguous memory
 	// is the address of that union.
 	var addr *byte = &union[0]
-	fmt.Println(addr)
 
 	// The second magic. Instead of pointing to bytes of memory, we can point
 	// to some useful type, T, by changing the type of the pointer to *T using
 	// unsafe.Pointer. In this case we want to interpret the union as member
 	// `MatchingRuleResult_MatchingRule_Body matching_rule`. That is, T = (*C.MatchingRuleResult_MatchingRule_Body) and *T = (**C.MatchingRuleResult_MatchingRule_Body).
 	var cast **C.MatchingRuleResult_MatchingRule_Body = (**C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(addr))
-	fmt.Println(cast)
 
 	// The final step. We wanted the contents of the union, not the address
 	// of the union. Dereference it!
@@ -349,8 +336,6 @@ func union_to_matching_rule(cbytes [24]byte) *C.MatchingRule {
 	if err := binary.Read(buf, binary.LittleEndian, &ptr); err == nil {
 		uptr := uintptr(ptr)
 		var result *C.MatchingRuleResult_MatchingRule_Body = (*C.MatchingRuleResult_MatchingRule_Body)(unsafe.Pointer(uptr))
-		fmt.Println("union_to_matching")
-		fmt.Println(result)
 		return result._2
 
 	}

@@ -1,16 +1,16 @@
 TEST?=./...
-NAME?=matt
 .DEFAULT_GOAL := ci
-VERSION?=0.0.5
 FFI_VERSION=0.3.15
+VERSION=0.0.7
+PROJECT=matt
 
 ci:: deps clean bin test
 
-bin:
-	go build -o build/$(NAME)
+bin: write_config
+	go build -o build/$(PROJECT)
 
 clean:
-	rm -rf build
+	rm -rf build dist
 
 deps:
 	@echo "--- 🐿  Fetching build dependencies "
@@ -29,13 +29,16 @@ proto:
 
 install_local: bin write_config
 	@echo "Creating a local phony plugin install so we can test locally"
-	mkdir -p ~/.pact/plugins/$(NAME)-$(VERSION)
-	cp ./build/$(NAME) ~/.pact/plugins/$(NAME)-$(VERSION)/
-	cp pact-plugin.json ~/.pact/plugins/$(NAME)-$(VERSION)/
+	mkdir -p ~/.pact/plugins/$(PROJECT)-$(VERSION)
+	cp ./build/$(PROJECT) ~/.pact/plugins/$(PROJECT)-$(VERSION)/
+	cp pact-plugin.json ~/.pact/plugins/$(PROJECT)-$(VERSION)/
 
 write_config:
 	@cp pact-plugin.json pact-plugin.json.new
-	@cat pact-plugin.json | jq '.version = "'$(VERSION)'" | .name = "'$(NAME)'"' | tee pact-plugin.json.new
-	@mv pact-plugin.json.new pact-plugin.json
+	@cat pact-plugin.json | jq '.version = "'$(VERSION)'" | .name = "'$(PROJECT)'" | .entryPoint = "'$(PROJECT)'"' | tee pact-plugin.json.new
+	@mv pact-plugin.json.new pact-plugin.json 
+
+ffi:
+	FFI_VERSION=$(FFI_VERSION) ./scripts/download-libs.sh
 
 .PHONY: bin test clean write_config

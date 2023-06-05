@@ -412,22 +412,22 @@ func extractRequestAndResponseMessages(pact string, interactionKey string) (requ
 		switch i := inter.(type) {
 		case *httpInteraction:
 			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
-			if i.Key == interactionKey {
-				log.Println("[DEBUG] HTTP interaction")
-				return parseMattMessage(i.Request.Body.Content), parseMattMessage(i.Response.Body.Content)
-			}
+			// if i.Key == interactionKey {
+			log.Println("[DEBUG] HTTP interaction")
+			return parseMattMessage(i.Request.Body.Content), parseMattMessage(i.Response.Body.Content)
+			// }
 		case *asyncMessageInteraction:
 			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
-			if i.Key == interactionKey {
-				log.Println("[DEBUG] async interaction")
-				return parseMattMessage(i.Contents.Content), ""
-			}
+			// if i.Key == interactionKey {
+			log.Println("[DEBUG] async interaction")
+			return parseMattMessage(i.Contents.Content), ""
+			// }
 		case *syncMessageInteraction:
 			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
-			if i.Key == interactionKey {
-				log.Println("[DEBUG] sync interaction")
-				return parseMattMessage(i.Request.Contents.Content), parseMattMessage(i.Response[0].Contents.Content)
-			}
+			// if i.Key == interactionKey {
+			log.Println("[DEBUG] sync interaction")
+			return parseMattMessage(i.Request.Contents.Content), parseMattMessage(i.Response[0].Contents.Content)
+			// }
 		default:
 			log.Printf("unknown interaction type: '%+v'", i)
 

@@ -1,7 +1,7 @@
 TEST?=./...
 .DEFAULT_GOAL := ci
 FFI_VERSION=0.3.15
-VERSION=0.0.7
+VERSION=0.0.8-fix+pact.reference.278
 PROJECT=matt
 
 ci:: deps clean bin test

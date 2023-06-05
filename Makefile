@@ -1,7 +1,7 @@
 TEST?=./...
 .DEFAULT_GOAL := ci
 FFI_VERSION=0.3.15
-VERSION=0.0.8-fix+pact.reference.278
+VERSION?=0.0.8-fix+pact.reference.278
 PROJECT=matt
 
 ci:: deps clean bin test
@@ -35,7 +35,7 @@ install_local: bin write_config
 
 write_config:
 	@cp pact-plugin.json pact-plugin.json.new
-	@cat pact-plugin.json | jq '.version = "'$(VERSION)'" | .name = "'$(PROJECT)'" | .entryPoint = "'$(PROJECT)'"' | tee pact-plugin.json.new
+	@cat pact-plugin.json | jq '.version = "'$(subst v,,$(VERSION))'" | .name = "'$(PROJECT)'" | .entryPoint = "'$(PROJECT)'"' | tee pact-plugin.json.new
 	@mv pact-plugin.json.new pact-plugin.json 
 
 ffi:

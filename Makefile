@@ -1,7 +1,7 @@
 TEST?=./...
 .DEFAULT_GOAL := ci
-FFI_VERSION=0.3.15
-VERSION=0.0.7
+FFI_VERSION=0.4.13
+VERSION=0.1.0
 PROJECT=matt
 
 ci:: deps clean bin test

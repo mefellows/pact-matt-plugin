@@ -17,13 +17,15 @@ release:
   extra_files:
     - glob: ./pact-plugin.json
 archives:
-  - replacements:
-      darwin: osx
-      linux: linux
-      windows: windows
-      amd64: x86_64
-      arm64: aarch64
-    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}{{ .ArtifactExt }}"
+  - id: pact-matt-plugin
+    name_template: >-
+      {{- .ProjectName }}-
+      {{- if eq .Os "darwin" }}osx-
+      {{- else }}{{ .Os }}-{{ end }}
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}aarch64
+      {{- else }}{{ .Arch }}{{ end }}
+      {{ .ArtifactExt }}
     format: gz
     files:
       - none*

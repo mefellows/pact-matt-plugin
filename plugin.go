@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -411,23 +412,32 @@ func extractRequestAndResponseMessages(pact string, interactionKey string) (requ
 
 		switch i := inter.(type) {
 		case *httpInteraction:
+			log.Println("[DEBUG] HTTP interaction")
 			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
-			if i.Key == interactionKey {
-				log.Println("[DEBUG] HTTP interaction")
-				return parseMattMessage(i.Request.Body.Content), parseMattMessage(i.Response.Body.Content)
-			}
+			return parseMattMessage(i.Request.Body.Content), parseMattMessage(i.Response.Body.Content)
 		case *asyncMessageInteraction:
+			log.Println("[DEBUG] asyncMessageInteraction", i.Contents.Content)
 			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
-			if i.Key == interactionKey {
-				log.Println("[DEBUG] async interaction")
-				return parseMattMessage(i.Contents.Content), ""
+			decodedContent, errDecodedContent := base64.StdEncoding.DecodeString(i.Contents.Content)
+			if errDecodedContent != nil {
+				fmt.Println("Error decoding request:", errDecodedContent)
+				return
 			}
+			return parseMattMessage(string(decodedContent)), ""
 		case *syncMessageInteraction:
+			log.Println("[DEBUG] syncMessageInteraction i", i)
 			log.Println("[DEBUG] keys", i.interaction.Key, interactionKey)
-			if i.Key == interactionKey {
-				log.Println("[DEBUG] sync interaction")
-				return parseMattMessage(i.Request.Contents.Content), parseMattMessage(i.Response[0].Contents.Content)
+			decodedReq, errDecodedReq := base64.StdEncoding.DecodeString(i.Request.Contents.Content)
+			if errDecodedReq != nil {
+				fmt.Println("Error decoding request:", errDecodedReq)
+				return
 			}
+			decodedResp, errDecodedResp := base64.StdEncoding.DecodeString(i.Response[0].Contents.Content)
+			if errDecodedResp != nil {
+				fmt.Println("Error decoding response:", errDecodedResp)
+				return
+			}
+			return parseMattMessage(string(decodedReq)), parseMattMessage(string(decodedResp))
 		default:
 			log.Printf("unknown interaction type: '%+v'", i)
 
